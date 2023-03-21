@@ -42,7 +42,7 @@ def make_report_and_send(merge_result):
     logger.info("Building report...")
     report = discordMessageBuilder.build_report(merge_pull_request_results=list(reversed(merge_result)))
     
-        # 누구누구 했는지도 보고서에 보내야하나...?
+    # 누구누구 했는지도 보고서에 보내야하나...?
     logger.info("Sending report to Discord Bot...")
     discordBot.set_message(report)
     discordBot.run(
@@ -85,8 +85,6 @@ if __name__ == '__main__':
     discordMessageBuilder = DiscordMessageBuilder()
     
     main(
-        skip_merge=True,
-        test_channel=True,
-        test_repository=False
+        # skip_merge=True,
+        # test_channel=True
     )
-    
