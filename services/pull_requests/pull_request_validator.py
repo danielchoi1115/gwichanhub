@@ -4,14 +4,19 @@ from pydantic import BaseModel
 from datetime import datetime
 import inspect
 import re
+import pytz
+
 from models import PullRequest, PullRequestValidationResult, ValidationResult
-from utils import get_name_from_id
+from utils import get_name_from_id, DateUtil
 
 class Files(BaseModel):
+    path: str
     filename: str
     extension: str
     def toString(self):
         return f"{self.filename}.{self.extension}"
+    def toFullString(self):
+        return f"{self.path}/{self.filename}.{self.extension}"
     
 class PullRequestValidator(BaseModel):
     result: List[PullRequestValidationResult] = []
@@ -41,14 +46,20 @@ class PullRequestValidator(BaseModel):
         )
         
     def _validate_title_date(self, pull_request: PullRequest) -> ValidationResult:
+        """ Pull Request의 Title과 Created_time을 검증하는 함수. \n
+        예시로 [Baekjoon] 23-03-21 의 이름을 가진 PR의 경우\n
+        3월 21일 00시 ~ 3월 22일 08시 59분까지 허용
+        """
+        
         result = self.default_result
         reason = self.default_reason
         
         # 날짜가 다르면 invalid pull request
-        title_date = datetime.strptime(pull_request.title.split()[-1], "%y-%m-%d").strftime("%y-%m-%d")
-        created_date = pull_request.created_at.strftime("%y-%m-%d")
+        title_date = datetime.strptime(pull_request.title.split()[-1], "%y-%m-%d").astimezone(pytz.timezone('Asia/Seoul'))
+        due_date = DateUtil.get_pull_request_due_time(title_date)
+        created_date = pull_request.created_at
         
-        if title_date != created_date:
+        if created_date < title_date or created_date > due_date:
             reason = "Pull Request가 생성된 날짜와 타이틀의 날짜가 다릅니다."
             result = False
             
@@ -95,12 +106,15 @@ class PullRequestValidator(BaseModel):
     def _parse_filenames(self, pull_request: PullRequest) -> List[Files]:
         filenames = []
         for f in pull_request.files:
-            filename = f.split('/')[-1]
+            f_split = f.split('/')
+            filename = f_split[-1]
+            path = "/".join(f_split[:-1])
             extension = None
             if '.' in filename:
                 filename, extension = filename.split('.')
             filenames.append(
                 Files(
+                    path=path,
                     filename=filename,
                     extension=extension
                 )
@@ -189,7 +203,27 @@ class PullRequestValidator(BaseModel):
             result=result,
             reason=reason
         )
+    
+    def _validate_filename_week(self, pull_request: PullRequest, filenames: List[Files]) -> ValidationResult:
+        result = self.default_result
+        reason = self.default_reason
         
+        week = DateUtil.get_weeknumber_from_startdate(pull_request.created_at)
+        path = f"Baekjoon/{week}주차"
+        if invalid_files := [
+            file.toFullString()
+            for file in filenames
+            if file.path.lower() != path.lower()
+        ]:
+            result = False
+            reason = f'현재 주차와 일치하지 않습니다. ({invalid_files[0]})'
+        
+        return ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        )
+    
     def validate_pull_requests(self, pull_requests: List[PullRequest]):
         
         # 선행조건 
@@ -218,9 +252,17 @@ class PullRequestValidator(BaseModel):
                 filename_format_result = self._validate_filename_format(filenames=filenames)
                 validation_details.append(filename_format_result)
 
+            if filename_format_result.result:
+                validation_details.append(self._validate_filename_week(
+                    pull_request=pr, filenames=filenames
+                ))
+            
             if user_id_result.result and filename_format_result.result:
-                validation_details.append(self._validate_file_username(pull_request=pr, filenames=filenames))
-
+                validation_details.append(self._validate_file_username(
+                    pull_request=pr, filenames=filenames
+                ))
+            
+            
             validation_result = all(res.result for res in validation_details)
             self.result.append(
                 PullRequestValidationResult(
@@ -229,6 +271,7 @@ class PullRequestValidator(BaseModel):
                     pull_request=pr
                 )
             )
+    
     def get_validation_result(self) -> List[PullRequestValidationResult]:
         return self.result
 pullRequestValidator = PullRequestValidator()
