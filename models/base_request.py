@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 class BaseRequest(BaseModel):
     headers: dict = settings.GITHUB_SERVICE_HEADERS
-    sleeptime: 0.5
+    sleeptime: float = 0.5
     def request(self, url: str, method: str) -> dict:
         time.sleep(self.sleeptime)
         try:
