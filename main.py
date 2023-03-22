@@ -5,7 +5,7 @@ from utils import DiscordMessageBuilder
 from config import settings
 
 logging.basicConfig(
-    filename='main.log',
+    filename='/usr/share/gwichanhub/main.log',
     encoding='utf-8',
     level=logging.INFO,
     format='%(asctime)s:%(levelname)s:%(pathname)s:%(funcName)s:%(lineno)d:%(message)s',
