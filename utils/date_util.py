@@ -11,12 +11,16 @@ date_map = {
         5: '토요일',
         6: '일요일',
     }
-
+# https://www.w3schools.com/python/python_datetime.asp
 class DateUtil:
     @staticmethod
     def get_pr_date_header():
         t = datetime.now()
         return t.strftime("%y-%m-%d ") + date_map[t.weekday()]
+    
+    @staticmethod
+    def to_full_date(date: datetime):
+        return datetime.strftime(date, "%Y-%m-%d %H:%M:%S")
     
     @staticmethod
     def get_weeknumber_from_startdate(date: datetime = None) -> int:
