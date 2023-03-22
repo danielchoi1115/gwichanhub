@@ -10,13 +10,13 @@ from models import PullRequest, PullRequestValidationResult, ValidationResult
 from utils import get_name_from_id, DateUtil
 
 class Files(BaseModel):
-    path: str
-    filename: str
-    extension: str
+    path: str | None = None
+    filename: str | None = None
+    extension: str | None = None
     def toString(self):
-        return f"{self.filename}.{self.extension}"
+        return f"{self.filename}.{self.extension}" if self.extension else self.filename
     def toFullString(self):
-        return f"{self.path}/{self.filename}.{self.extension}"
+        return f"{self.path}/{self.toString()}"
     
 class PullRequestValidator(BaseModel):
     result: List[PullRequestValidationResult] = []
@@ -60,7 +60,7 @@ class PullRequestValidator(BaseModel):
         created_date = pull_request.created_at
         
         if created_date < title_date or created_date > due_date:
-            reason = "Pull Request가 생성된 날짜와 타이틀의 날짜가 다릅니다."
+            reason = f"Pull Request 기한이 지났습니다. 생성일자: {created_date}"
             result = False
             
         return ValidationResult(
@@ -110,7 +110,7 @@ class PullRequestValidator(BaseModel):
             filename = f_split[-1]
             path = "/".join(f_split[:-1])
             extension = None
-            if '.' in filename:
+            if '.' in filename and filename[0] != ".":
                 filename, extension = filename.split('.')
             filenames.append(
                 Files(
@@ -242,27 +242,32 @@ class PullRequestValidator(BaseModel):
             user_id_result = self._validate_user_id(pr)
             validation_details.append(user_id_result)
 
+            filename_format_result = None
             if user_id_result.result:
                 validation_details.append(self._validate_labels(pr))
-
                 filenames = self._parse_filenames(pr)
-                validation_details.append(self._validate_filenames(filenames=filenames))
-                validation_details.append(self._validate_file_extension(filenames=filenames))
-
                 filename_format_result = self._validate_filename_format(filenames=filenames)
-                validation_details.append(filename_format_result)
-
-            if filename_format_result.result:
+                validation_details.extend(
+                    (
+                        self._validate_filenames(filenames=filenames),
+                        self._validate_file_extension(filenames=filenames),
+                        filename_format_result,
+                    )
+                )
+                
+            if filename_format_result and filename_format_result.result:
                 validation_details.append(self._validate_filename_week(
                     pull_request=pr, filenames=filenames
                 ))
-            
-            if user_id_result.result and filename_format_result.result:
+
+            if (user_id_result.result and 
+                filename_format_result and 
+                filename_format_result.result):
                 validation_details.append(self._validate_file_username(
                     pull_request=pr, filenames=filenames
                 ))
-            
-            
+
+
             validation_result = all(res.result for res in validation_details)
             self.result.append(
                 PullRequestValidationResult(
