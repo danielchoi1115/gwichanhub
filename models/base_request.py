@@ -3,15 +3,16 @@ import requests
 import json
 import logging
 from pydantic import BaseModel
-
+import time
 from config import settings
 
 log = logging.getLogger(__name__)
 
 class BaseRequest(BaseModel):
     headers: dict = settings.GITHUB_SERVICE_HEADERS
-    
+    sleeptime: 0.5
     def request(self, url: str, method: str) -> dict:
+        time.sleep(self.sleeptime)
         try:
             res = None
             if method.lower() == "get":
@@ -28,3 +29,4 @@ class BaseRequest(BaseModel):
         ) as ex:
             log.warning(ex)
             return {}
+        

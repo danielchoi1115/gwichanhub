@@ -36,6 +36,5 @@ class PullRequestMerger(BaseRequest):
                     validation=item
                 )
             )
-            time.sleep(3)
     def get_merge_result(self) -> List[MergePullRequestResult]:
         return self.results

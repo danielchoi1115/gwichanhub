@@ -23,7 +23,6 @@ class PullRequestFetcher(BaseRequest):
                 method='get', 
                 url=apiUrlBuilder.build_pull_request_files_url(pull_number)
             )
-            time.sleep(0.5)
             
     def fetch_all(self):
         self.fetch_pull_requests()
