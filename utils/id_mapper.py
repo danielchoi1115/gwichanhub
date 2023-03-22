@@ -12,8 +12,10 @@ id_map = {
         'deingvelop': '송민진',
         'black-kit': '양석진',
         'cherryjubilee': '박혜원',
-        'devjoowon': "박주원"
+        'devjoowon': "박주원",
+        'lhynjn9': '이현정',
     }
 
 def get_name_from_id(user_id:str):
-    return id_map.get(user_id.lower())
+    _id = id_map.get(user_id.lower())
+    return user_id if _id is None else _id
