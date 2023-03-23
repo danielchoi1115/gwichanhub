@@ -1,10 +1,11 @@
 
 from typing import List
-import time
+from config import settings
 from utils import apiUrlBuilder
 from models import BaseRequest, PullRequestValidationResult, MergeResult, MergePullRequestResult
 
 class PullRequestMerger(BaseRequest):
+    sleeptime = settings.MERGE_REQUEST_SLEEPTIME
     results: List[MergePullRequestResult] = []
     skip_merge: bool = False
     
