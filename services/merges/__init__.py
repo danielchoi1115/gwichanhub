@@ -1,1 +1,0 @@
-from .pull_request_merger import PullRequestMerger

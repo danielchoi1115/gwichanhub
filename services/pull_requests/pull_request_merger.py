@@ -1,11 +1,11 @@
 
 from typing import List
-from config import settings
-from utils import apiUrlBuilder
+from configs import settings
 from models import BaseRequest, PullRequestValidationResult, MergeResult, MergePullRequestResult
 
 class PullRequestMerger(BaseRequest):
-    sleeptime = settings.MERGE_REQUEST_SLEEPTIME
+    headers: dict = settings.github.SERVICE_HEADERS
+    sleeptime: float = settings.request.MERGE_SLEEPTIME
     results: List[MergePullRequestResult] = []
     skip_merge: bool = False
     
@@ -26,7 +26,7 @@ class PullRequestMerger(BaseRequest):
             if item.validation_result:
                 res = self.request(
                     method='put', 
-                    url=apiUrlBuilder.build_merge_pull_request_url(pull_number=item.pull_request.number)
+                    url=settings.github.url_merge_pull_request(pull_number=item.pull_request.number)
                 )
             merge_result = MergeResult(
                 **res
