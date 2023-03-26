@@ -4,14 +4,13 @@ import json
 import logging
 from pydantic import BaseModel
 import time
-from config import settings
-
+from typing import Dict
 log = logging.getLogger(__name__)
 
 class BaseRequest(BaseModel):
-    headers: dict = settings.GITHUB_SERVICE_HEADERS
-    sleeptime: float = settings.DEFAULT_REQUEST_SLEEPTIME
-    def request(self, url: str, method: str) -> dict:
+    sleeptime: float
+    headers: Dict[str, str]
+    def request(self, method: str, url: str) -> Dict:
         time.sleep(self.sleeptime)
         try:
             res = None
@@ -29,4 +28,4 @@ class BaseRequest(BaseModel):
         ) as ex:
             log.warning(ex)
             return {}
-        
+

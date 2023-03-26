@@ -5,3 +5,4 @@ from .validation_result import ValidationResult
 from .merge_result import MergeResult
 from .merge_pull_request_result import MergePullRequestResult
 from .message_type import MessageType
+from .commit_file import CommitFile
