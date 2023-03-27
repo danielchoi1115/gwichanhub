@@ -1,218 +1,295 @@
-
 from typing import List
+from typing_extensions import Self
 from pydantic import BaseModel
 from datetime import datetime
 import inspect
-import re
 import pytz
+from enum import Enum
 
-from models import PullRequest, PullRequestValidationResult, ValidationResult
-from utils import get_name_from_id, DateUtil
+from models import PullRequest, PullRequestValidationResult, ValidationResult, CommitFile
+from utils import get_name_from_id, DateUtil, FileUtil
+from configs import settings
 
-class Files(BaseModel):
-    path: str | None = None
-    filename: str | None = None
-    extension: str | None = None
-    def toString(self):
-        return f"{self.filename}.{self.extension}" if self.extension else self.filename
-    def toFullString(self):
-        return f"{self.path}/{self.toString()}"
+class Flags(Enum):
+    TITLE = 1
+    USER_ID = 2
+    FILE_SPECIAL = 3
+    FILE_FORMAT = 4
     
+def check_and_set_flag(flags_to_check, flag_to_add = None):
+    def decorator(fun):
+        def wrapper(*args, **kwargs):
+            if args[0].has_flags(flags_to_check):
+                res = fun(*args, **kwargs)  
+                if res.validation_details[-1].result:
+                    args[0].add_flag(flag_to_add)
+                return res
+            else: 
+                return args[0]
+        return wrapper
+    return decorator
+
 class PullRequestValidator(BaseModel):
-    result: List[PullRequestValidationResult] = []
+    maxlen: int = settings.validator.MAX_ERROR_CONTENT_LENGTH
+    pull_request: PullRequest | None = None
+    commit_files: List[CommitFile] | None = None
+    validation_details: List[ValidationResult] = []
+    validation_flags: set[Flags] = set() # 검사 통과한 항목
     
-    default_result: bool = True
-    default_reason: str = ''
-    forbiden_pattern: str = r'[\s#%&{}\\/<>*!?${}\':"@+`|=]+'
+    @classmethod
+    def validator(cls: Self) -> Self:
+        return cls()
     
-    allowed_extension: set[str] = {"cpp", "c", "py", "java", 'js', 'h', 'ts', 'kt', 'kts', 'rb', 'swift'}
+    def has_flags(self, flags: List[Flags]):
+        return all((f in self.validation_flags) for f in flags)
     
-    def is_valid_title_format(self, title: str):
-        pattern = r"\[Baekjoon\] \d{2}-\d{2}-\d{2}"
-        return bool(re.match(pattern, title, re.IGNORECASE))
+    def set_pull_request(self, pull_request: PullRequest) -> Self:
+        self.pull_request = pull_request
+        return self
     
-    def _validate_title_format(self, pull_request: PullRequest) -> ValidationResult:
-        # 타이틀 형식이 다르면 invalid pull request
-        result = self.default_result
-        reason = self.default_reason
-        if not self.is_valid_title_format(title=pull_request.title):
-            reason = "잘못된 타이틀 형식입니다."
+    def set_commit_files(self, commit_files: List[CommitFile]) -> Self:
+        self.commit_files = commit_files
+        return self
+    
+    def validate(self) -> ValidationResult:
+        validation_result = all(res.result for res in self.validation_details)
+        return PullRequestValidationResult(
+                    validation_result=validation_result,
+                    validation_details=self.validation_details,
+                    pull_request=self.pull_request
+                )
+    
+    def add_result(self, result: ValidationResult):
+        self.validation_details.append(result)
+    
+    def add_flag(self, flag: Flags):
+        self.validation_flags.add(flag)
+    
+    @check_and_set_flag([], Flags.USER_ID)
+    def validate_user_id(self) -> Self:
+        """user_id가 있는지 검사"""
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+        
+        name = get_name_from_id(self.pull_request.user_id)
+        if name is None:
             result = False
+            reason = "알 수 없는 user_id 입니다."
             
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.USER_ID], Flags.TITLE)
+    def validate_title_format(self) -> Self:
+        """Pull Request의 타이틀 형식이 [Baekjoon] yy-mm-dd인지 검사. 대소문자 무시"""
+        result = settings.validator.DEFAULT_RESULT
+        reason = settings.validator.DEFAULT_REASON
+        if not FileUtil.is_valid_title_format(title=self.pull_request.title):
+            reason = "잘못된 타이틀 형식입니다."
+            result = False
         
-    def _validate_title_date(self, pull_request: PullRequest) -> ValidationResult:
+        self.add_result(ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.TITLE, Flags.USER_ID])
+    def validate_title_date(self) -> Self:
         """ Pull Request의 Title과 Created_time을 검증하는 함수. \n
         예시로 [Baekjoon] 23-03-21 의 이름을 가진 PR의 경우\n
         3월 21일 00시 ~ 3월 22일 08시 59분까지 허용
+        
+        선행함수 validate_title_format
         """
-        
-        result = self.default_result
-        reason = self.default_reason
-        
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
         # 날짜가 다르면 invalid pull request
-        title_date = datetime.strptime(pull_request.title.split()[-1], "%y-%m-%d").astimezone(pytz.timezone('Asia/Seoul'))
+        title_date = datetime.strptime(self.pull_request.title.split()[-1], "%y-%m-%d").astimezone(pytz.timezone('Asia/Seoul'))
         due_date = DateUtil.get_pull_request_due_time(title_date)
-        created_date = pull_request.created_at
+        created_date = self.pull_request.created_at
         
         if created_date < title_date or created_date > due_date:
             reason = f"Pull Request 기한이 지났습니다. 생성일자: {created_date}"
             result = False
             
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
+        ))
+        return self
     
-    def _validate_user_id(self, pull_request: PullRequest) -> ValidationResult:
-        result = self.default_result
-        reason = self.default_reason
-        
-        name = get_name_from_id(pull_request.user_id)
-        if name is None:
-            result = False
-            reason = "알 수 없는 user_id 입니다."
-            
-        return ValidationResult(
-            validation=inspect.currentframe().f_code.co_name,
-            result=result,
-            reason=reason
-        )
-        
-    def _validate_labels(self, pull_request: PullRequest) -> ValidationResult:
-        # label에 이름이 없으면 invalid pull request
-        result = self.default_result
-        reason = self.default_reason
-        name = get_name_from_id(pull_request.user_id)
-        
-        if name not in pull_request.labels:
+    @check_and_set_flag([Flags.USER_ID])
+    def validate_labels(self) -> Self:
+        """label에 이름이 있는지 검사"""
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+        name = get_name_from_id(self.pull_request.user_id)
+
+        if name not in self.pull_request.labels:
             result = False
             reason = "Label에 이름이 없습니다."
             
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
+        ))
+        return self
     
-    def _has_space_or_special_letters(self, string: str):
-        return bool(re.search(self.forbiden_pattern, string))
-    
-    def _parse_filenames(self, pull_request: PullRequest) -> List[Files]:
-        filenames = []
-        for f in pull_request.files:
-            f_split = f.split('/')
-            filename = f_split[-1]
-            path = "/".join(f_split[:-1])
-            extension = None
-            if '.' in filename and filename[0] != ".":
-                filename, extension = filename.split('.')
-            filenames.append(
-                Files(
-                    path=path,
-                    filename=filename,
-                    extension=extension
-                )
-            )
-        return filenames
-
-    def _validate_filenames(self, filenames: List[Files]):
-        result = self.default_result
-        reason = self.default_reason
+    @check_and_set_flag([Flags.USER_ID], Flags.FILE_SPECIAL)
+    def validate_file_no_special(self) -> Self:
+        """파일명에 공백이나 특수문자가 있는지 검사
+        """
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
 
         if invalid_files := [
             file.toString()
-            for file in filenames
-            if self._has_space_or_special_letters(file.toString())
+            for file in self.commit_files
+            if FileUtil.has_space_or_special_letters(file.toString())
         ]:
-            if len(invalid_files) > 3:
-                reason = f'파일명에 공백이나 특수문자가 있습니다. ({", ".join(invalid_files[:3])}...)'
+            if len(invalid_files) > self.maxlen:
+                content = ", ".join(invalid_files[:self.maxlen]) + "..."
             else:
-                reason = f'파일명에 공백이나 특수문자가 있습니다. ({", ".join(invalid_files)})'
+                content = ", ".join(invalid_files)
+            reason = f'파일명에 공백이나 특수문자가 있습니다. ({content})'
             result = False
 
-
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.FILE_SPECIAL])
+    def validate_file_path(self) -> Self:
+        """파일이 올바른 위치에 있는지 검사. 
+        예시) baekjoon/정수론/문제.py 에서 문제.py 파일이 baekjoon/정수론 폴더에 있는지만 확인한다.
+        """
+
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
         
-    def _validate_filename_format(self, filenames: List[Files]):
-        result = self.default_result
-        reason = self.default_reason
         if invalid_files := [
-            file.toString()
-            for file in filenames
-            if len(file.filename.split('_')) != 2
-        ]:
+            file.toFullString()
+            for file in self.commit_files
+            if len(file.path) != 2 or file.path[1] not in settings.validator.ALLOWED_FOLDERNAMES
+        ]: 
+            # file.path should look like ["baekjoon", "정수론"]
             result = False
-            if len(invalid_files) > 3:
-                reason = f'파일명의 형식이 올바르지 않습니다. ({", ".join(invalid_files[:])}...)'
+            if len(invalid_files) >  self.maxlen:
+                content = ", ".join(invalid_files[:self.maxlen]) + "..."
             else:
-                reason = f'파일명의 형식이 올바르지 않습니다. ({", ".join(invalid_files)})'
+                content = ", ".join(invalid_files)
+            reason = f'파일이 올바른 위치에 있지 않습니다. ({content})'
 
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
-    
-    def _validate_file_extension(self, filenames: List[Files]) -> ValidationResult:
-        result = self.default_result
-        reason = self.default_reason
+        ))
+        return self
+
+    @check_and_set_flag([Flags.FILE_SPECIAL])
+    def validate_file_extension(self) -> Self:
+        """파일명의 확장자가 올바른지 검사"""
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
         if invalid_files := [
             file.toString()
-            for file in filenames
-            if file.extension not in self.allowed_extension
+            for file in self.commit_files
+            if file.extension not in settings.validator.ALLOWED_EXTENSIONS
         ]:
             result = False
-            if len(invalid_files) > 3:
-                reason = f'허용되지 않은 확장자입니다. ({", ".join(invalid_files[:3])}...)'
+            if len(invalid_files) > self.maxlen:
+                content = ", ".join(invalid_files[:self.maxlen]) + "..."
             else:
-                reason = f'허용되지 않은 확장자입니다. ({", ".join(invalid_files)})'
-        return ValidationResult(
-            validation=inspect.currentframe().f_code.co_name,
-            result=result,
-            reason=reason
-        )
+                content = ", ".join(invalid_files)
+            reason = f'허용되지 않은 확장자입니다. ({content})'
         
-    def _validate_file_username(self, pull_request: PullRequest, filenames: List[Files]) -> ValidationResult:
-        result = self.default_result
-        reason = self.default_reason
-        name = get_name_from_id(pull_request.user_id)
+        self.add_result(ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        ))
+        return self
+        
+    @check_and_set_flag([Flags.FILE_SPECIAL], Flags.FILE_FORMAT)
+    def validate_file_format(self) -> Self:
+        """파일명의 형식이 문제명_이름 으로 되어있는지 검사.\n
+        파일명이 `H_` 로 시작하는 경우 무시하고  `_` 를 기준으로 파일명을 분리해서 길이가 2인지 검사한다.
+        """
+        
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+        prefix = settings.validator.FILENAME_WITH_NUMBER_PREFIX
+        delimeter = settings.validator.FILENAME_DELIMITER
+        
+        if invalid_files := [
+            file.toString()
+            for file in self.commit_files
+            if len(file.filename.lstrip(prefix).split(delimeter)) != 2
+        ]:
+            result = False
+            if len(invalid_files) > self.maxlen:
+                content = ", ".join(invalid_files[:self.maxlen]) + "..."
+            else:
+                content = ", ".join(invalid_files)
+            reason = f'파일명의 형식이 올바르지 않습니다. ({content})'
+        
+        self.add_result(ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.FILE_FORMAT])
+    def validate_file_username(self) -> Self:
+        """파일명의 이름이 올바른지 검사. 다른 유저의 파일을 커밋/삭제 하는 경우를 방지하기 위함함"""
+
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+        
+        name = get_name_from_id(self.pull_request.user_id)
 
         if invalid_files := [
             file.toString()
-            for file in filenames
+            for file in self.commit_files
             if file.filename.split('_')[-1] != name
         ]:
             result = False
-            if len(invalid_files) > 3:
-                reason = f'파일명에 이름이 잘못 기재되어 있습니다. ({", ".join(invalid_files[:3])}...)'
+            if len(invalid_files) > self.maxlen:
+                content = ", ".join(invalid_files[:self.maxlen]) + "..."
             else:
-                reason = f'파일명에 이름이 잘못 기재되어 있습니다. ({", ".join(invalid_files)})'
+                content = ", ".join(invalid_files)
+            reason = f'파일명에서 이름을 찾을 수 없습니다. ({content})'
 
-        return ValidationResult(
+        self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
             result=result,
             reason=reason
-        )
+        ))
+        return self
     
-    def _validate_filename_week(self, pull_request: PullRequest, filenames: List[Files]) -> ValidationResult:
-        result = self.default_result
-        reason = self.default_reason
+    def validate_filename_week(self) -> ValidationResult:
+        """Deprecated Warning"""
+        # 더 이상 사용 안할 method
+        reason = settings.validator.DEFAULT_REASON
         
-        week = DateUtil.get_weeknumber_from_startdate(pull_request.created_at)
+        week = DateUtil.get_weeknumber_from_startdate(self.pull_request.created_at)
         path = f"Baekjoon/{week}주차"
         if invalid_files := [
             file.toFullString()
-            for file in filenames
+            for file in self.commit_files
             if file.path.lower() != path.lower()
         ]:
             result = False
@@ -223,60 +300,64 @@ class PullRequestValidator(BaseModel):
             result=result,
             reason=reason
         )
-    
-    def validate_pull_requests(self, pull_requests: List[PullRequest]):
-        
-        # 선행조건 
-        # title_format이 성공해야 title_date 체크가능
-        # user_id가 성공해야 labels, filenames 체크 가능
-        # filename_format이 성공해서 file_username 체크 가능
 
-        for pr in pull_requests:
-            validation_details: List[ValidationResult] = []
-
-            title_format_result = self._validate_title_format(pr)
-            validation_details.append(title_format_result)
-            if title_format_result.result:
-                validation_details.append(self._validate_title_date(pr))
-
-            user_id_result = self._validate_user_id(pr)
-            validation_details.append(user_id_result)
-
-            filename_format_result = None
-            if user_id_result.result:
-                validation_details.append(self._validate_labels(pr))
-                filenames = self._parse_filenames(pr)
-                filename_format_result = self._validate_filename_format(filenames=filenames)
-                validation_details.extend(
-                    (
-                        self._validate_filenames(filenames=filenames),
-                        self._validate_file_extension(filenames=filenames),
-                        filename_format_result,
-                    )
-                )
-                
-            if filename_format_result and filename_format_result.result:
-                validation_details.append(self._validate_filename_week(
-                    pull_request=pr, filenames=filenames
-                ))
-
-            if (user_id_result.result and 
-                filename_format_result and 
-                filename_format_result.result):
-                validation_details.append(self._validate_file_username(
-                    pull_request=pr, filenames=filenames
-                ))
+    def validate_pull_request(self, pull_request: PullRequest) -> PullRequestValidationResult:
+        files = FileUtil.parse_files(pull_request.files)
+        return PullRequestValidator.validator()         \
+                        .set_pull_request(pull_request) \
+                        .set_commit_files(files)        \
+                        .validate_user_id()             \
+                        .validate_title_format()        \
+                        .validate_title_date()          \
+                        .validate_labels()              \
+                        .validate_file_no_special() \
+                        .validate_file_path()       \
+                        .validate_file_extension()      \
+                        .validate_file_format()     \
+                        .validate_file_username()       \
+                        .validate()
 
 
-            validation_result = all(res.result for res in validation_details)
-            self.result.append(
-                PullRequestValidationResult(
-                    validation_result=validation_result,
-                    validation_details=validation_details,
-                    pull_request=pr
-                )
-            )
-    
-    def get_validation_result(self) -> List[PullRequestValidationResult]:
-        return self.result
+    def get_validation_result(self, pull_requests: List[PullRequest]):
+        return [
+            self.validate_pull_request(p) 
+            for p in pull_requests
+        ]
+
 pullRequestValidator = PullRequestValidator()
+
+def validate_pull_request(self, pr: PullRequest) -> PullRequestValidationResult:
+    validation_details: List[ValidationResult] = []
+
+    # User ID 검증
+    user_id_result = self.validate_user_id(pr)
+    validation_details.append(user_id_result)
+
+    if user_id_result.result:
+        # Title 형식 검증
+        title_format_result = self.validate_title_format(pr)
+        validation_details.append(title_format_result)
+        
+        if title_format_result.result:
+            validation_details.append(self.validate_title_date(pr))
+
+        validation_details.append(self.validate_labels(pr))
+        no_special_result = self.validate_file_no_special(pr)
+        
+        filenames = self.parse_filenames(pr)
+        if no_special_result.result:
+            validation_details.append(self.validate_file_path(filenames))
+            validation_details.append(self.validate_file_extension(filenames))
+            format_result = self.validate_file_format(filenames)
+            validation_details.append(format_result)
+            
+            if format_result.result:
+                validation_details.append(self.validate_file_username(pr, filenames))
+
+
+    validation_result = all(res.result for res in validation_details)
+    return PullRequestValidationResult(
+        validation_result=validation_result,
+        validation_details=validation_details,
+        pull_request=pr
+    )

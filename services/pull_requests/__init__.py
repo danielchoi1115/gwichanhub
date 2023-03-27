@@ -1,3 +1,4 @@
 from .pull_request_fetcher import PullRequestFetcher
 from .pull_request_parser import PullRequestParser
 from .pull_request_validator import PullRequestValidator
+from .pull_request_merger import PullRequestMerger
