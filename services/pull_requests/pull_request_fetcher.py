@@ -1,11 +1,11 @@
 
 from typing import List, Dict
-import time
-
 from models import BaseRequest
-from utils import apiUrlBuilder
+from configs import settings
 
-class PullRequestFetcher(BaseRequest):    
+class PullRequestFetcher(BaseRequest):
+    headers: dict = settings.github.SERVICE_HEADERS
+    sleeptime: float = settings.request.DEFAULT_SLEEPTIME
     pull_requests: List[Dict] | None = None
     pull_request_files: Dict = {}
     
@@ -13,7 +13,7 @@ class PullRequestFetcher(BaseRequest):
         # Open되어있는 Pull request 전부 가져오기
         self.pull_requests = self.request(
             method='get', 
-            url=apiUrlBuilder.build_pull_requests_url()
+            url=settings.github.url_pull_requests()
         )
         
     def fetch_pull_request_files(self):
@@ -21,7 +21,7 @@ class PullRequestFetcher(BaseRequest):
             pull_number = p.get("number")
             self.pull_request_files[pull_number] = self.request(
                 method='get', 
-                url=apiUrlBuilder.build_pull_request_files_url(pull_number)
+                url=settings.github.url_pull_request_files(pull_number)
             )
             
     def fetch_all(self):
