@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import pytz
-from config import settings
+from configs import settings
 import math
 date_map = {
         0: '월요일',
@@ -26,9 +26,9 @@ class DateUtil:
     def get_weeknumber_from_startdate(date: datetime = None) -> int:
         if date is None:
             date = datetime.now()
-        dt = date - datetime.strptime(settings.START_DATE, "%Y-%m-%d").astimezone(pytz.timezone('Asia/Seoul')) 
+        dt = date - datetime.strptime(settings.validator.START_DATE, "%Y-%m-%d").astimezone(pytz.timezone('Asia/Seoul')) 
         return math.floor(dt.days/7)+1
     
     @staticmethod
     def get_pull_request_due_time(start_time: datetime) -> datetime:
-        return start_time + timedelta(seconds=settings.PR_DUE_SECONDS)
+        return start_time + timedelta(seconds=settings.validator.PR_DUE_SECONDS)
