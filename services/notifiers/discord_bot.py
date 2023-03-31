@@ -7,8 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from configs import settings
-
 class DiscordBot(discord.Client):
     channel_id: int = None
     token: str = None
