@@ -2,8 +2,7 @@ from typing import List
 from pydantic import BaseModel
 from models import MergePullRequestResult, PullRequest, MessageType
 from .date_util import DateUtil
-from .id_mapper import get_name_from_id
-
+from configs import settings
 class ResultCase(BaseModel):
     total: int
     successful: List = []
@@ -26,7 +25,7 @@ class DiscordMessageBuilder:
             total=len(merge_pull_request_results)
         )
         for result in merge_pull_request_results:
-            name = get_name_from_id(result.validation.pull_request.user_id)
+            name = settings.github.get_name_from_id(result.validation.pull_request.user_id)
             if result.merge.merged:
                 result_case.successful.append(name)
 
@@ -39,11 +38,12 @@ class DiscordMessageBuilder:
         return result_case
     
     def format_summary(self, result_case: ResultCase):
-        head = 'TEST' if self.skip_merge else DateUtil.get_pr_date_header()
+        # head = 'TEST' if self.skip_merge else DateUtil.get_pr_date_header()
+        head = DateUtil.get_pr_date_header()
         return f"""**{head} Merge Pull Request Report** ```md\n<Summary>\nNo. Pull Requests: {result_case.total}\n성공: {len(result_case.successful)}건 {result_case.successfulToString()}\n반려: {len(result_case.rejected)}건 {result_case.rejectedToString()}\n실패: {len(result_case.failed)}건 {result_case.failedToString()}```""" 
     
     def format_pr_header(self, pull_request: PullRequest, text):
-        return f"""<PR #{pull_request.number} "{pull_request.title}" by {get_name_from_id(pull_request.user_id)}>\n{text}"""
+        return f"""<PR #{pull_request.number} "{pull_request.title}" by {settings.github.get_name_from_id(pull_request.user_id)}>\n{text}"""
     
     def build_message_from_result(self, msg_type: MessageType, result: MergePullRequestResult) -> str:
         text = ''
