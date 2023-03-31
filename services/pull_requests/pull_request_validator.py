@@ -3,11 +3,10 @@ from typing_extensions import Self
 from pydantic import BaseModel
 from datetime import datetime
 import inspect
-import pytz
 from enum import Enum
 
 from models import PullRequest, PullRequestValidationResult, ValidationResult, CommitFile
-from utils import get_name_from_id, DateUtil, FileUtil
+from utils import DateUtil, FileUtil
 from configs import settings
 
 class Flags(Enum):
@@ -71,7 +70,7 @@ class PullRequestValidator(BaseModel):
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
         
-        name = get_name_from_id(self.pull_request.user_id)
+        name = settings.github.get_name_from_id(self.pull_request.user_id)
         if name is None:
             result = False
             reason = "알 수 없는 user_id 입니다."
@@ -102,20 +101,18 @@ class PullRequestValidator(BaseModel):
     @check_and_set_flag([Flags.TITLE, Flags.USER_ID])
     def validate_title_date(self) -> Self:
         """ Pull Request의 Title과 Created_time을 검증하는 함수. \n
-        예시로 [Baekjoon] 23-03-21 의 이름을 가진 PR의 경우\n
-        3월 21일 00시 ~ 3월 22일 08시 59분까지 허용
+        예시로 23년 3월 22일에 검증 진행 시 [Baekjoon] 23-03-21 의 이름을 가진 PR만 허용\n
         
         선행함수 validate_title_format
         """
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
         # 날짜가 다르면 invalid pull request
-        title_date = datetime.strptime(self.pull_request.title.split()[-1], "%y-%m-%d").astimezone(pytz.timezone('Asia/Seoul'))
-        due_date = DateUtil.get_pull_request_due_time(title_date)
-        created_date = self.pull_request.created_at
-        
-        if created_date < title_date or created_date > due_date:
-            reason = f"Pull Request 기한이 지났습니다. 생성일자: {created_date}"
+        title_date = DateUtil.datetome_from_title(self.pull_request.title.split()[-1])
+        pull_request_date = datetime.now()
+
+        if DateUtil.is_same_day(title_date, pull_request_date):
+            reason = "타이틀의 날짜가 일치하지 않습니다."
             result = False
             
         self.add_result(ValidationResult(
@@ -130,7 +127,7 @@ class PullRequestValidator(BaseModel):
         """label에 이름이 있는지 검사"""
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
-        name = get_name_from_id(self.pull_request.user_id)
+        name = settings.github.get_name_from_id(self.pull_request.user_id)
 
         if name not in self.pull_request.labels:
             result = False
@@ -172,7 +169,7 @@ class PullRequestValidator(BaseModel):
     @check_and_set_flag([Flags.FILE_SPECIAL])
     def validate_file_path(self) -> Self:
         """파일이 올바른 위치에 있는지 검사. 
-        예시) baekjoon/정수론/문제.py 에서 문제.py 파일이 baekjoon/정수론 폴더에 있는지만 확인한다.
+        예시) baekjoon/정수론 폴더에 있는지 확인.
         """
 
         reason = settings.validator.DEFAULT_REASON
@@ -232,11 +229,10 @@ class PullRequestValidator(BaseModel):
         result = settings.validator.DEFAULT_RESULT
         prefix = settings.validator.FILENAME_WITH_NUMBER_PREFIX
         delimeter = settings.validator.FILENAME_DELIMITER
-        
         if invalid_files := [
             file.toString()
             for file in self.commit_files
-            if len(file.filename.lstrip(prefix).split(delimeter)) != 2
+            if len(file.filename.lstrip(prefix).split(delimeter)) != 2 or file.filename[0].isdigit()
         ]:
             result = False
             if len(invalid_files) > self.maxlen:
@@ -259,7 +255,7 @@ class PullRequestValidator(BaseModel):
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
         
-        name = get_name_from_id(self.pull_request.user_id)
+        name = settings.github.get_name_from_id(self.pull_request.user_id)
 
         if invalid_files := [
             file.toString()
@@ -280,27 +276,6 @@ class PullRequestValidator(BaseModel):
         ))
         return self
     
-    def validate_filename_week(self) -> ValidationResult:
-        """Deprecated Warning"""
-        # 더 이상 사용 안할 method
-        reason = settings.validator.DEFAULT_REASON
-        
-        week = DateUtil.get_weeknumber_from_startdate(self.pull_request.created_at)
-        path = f"Baekjoon/{week}주차"
-        if invalid_files := [
-            file.toFullString()
-            for file in self.commit_files
-            if file.path.lower() != path.lower()
-        ]:
-            result = False
-            reason = f'현재 주차와 일치하지 않습니다. ({invalid_files[0]})'
-        
-        return ValidationResult(
-            validation=inspect.currentframe().f_code.co_name,
-            result=result,
-            reason=reason
-        )
-
     def validate_pull_request(self, pull_request: PullRequest) -> PullRequestValidationResult:
         files = FileUtil.parse_files(pull_request.files)
         return PullRequestValidator.validator()         \
