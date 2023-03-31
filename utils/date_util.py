@@ -15,8 +15,9 @@ date_map = {
 class DateUtil:
     @staticmethod
     def get_pr_date_header():
-        t = datetime.now()
-        return t.strftime("%y-%m-%d ") + date_map[t.weekday()]
+        t = datetime.now().astimezone(pytz.timezone('Asia/Seoul')) - timedelta(days = 1)
+        weeknum = DateUtil.get_weeknumber_from_startdate(t)
+        return f'({weeknum}주차) {t.strftime("%y년 %m월 %d일")} {date_map[t.weekday()]}'    
     
     @staticmethod
     def to_full_date(date: datetime):
@@ -32,3 +33,11 @@ class DateUtil:
     @staticmethod
     def get_pull_request_due_time(start_time: datetime) -> datetime:
         return start_time + timedelta(seconds=settings.validator.PR_DUE_SECONDS)
+    
+    @staticmethod
+    def datetome_from_title(title: str):
+        return datetime.strptime(title, "%y-%m-%d")
+    
+    @staticmethod
+    def is_same_day(d1: datetime, d2: datetime):
+        return d1.year == d2.year and d1.month == d2.month and d1.day == d2.day 
