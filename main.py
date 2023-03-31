@@ -19,13 +19,14 @@ def main(
     
     if test_repository:
         settings.github.set_test()
-        
+        print("test_repository set")
     if skip_merge:
         pullRequestMerger.set_skip_merge(True)
         discordMessageBuilder.set_skip_merge(True)
-    
+        print("skip_merge set")
     if test_channel:
         discordBot.set_channel_id(settings.discord.CHANNEL_ID_TEST)
+        print("test_channel set")
     else:
         discordBot.set_channel_id(settings.discord.CHANNEL_ID_SERVICE)
     
