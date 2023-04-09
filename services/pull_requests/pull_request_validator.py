@@ -1,14 +1,13 @@
 from typing import List
 from typing_extensions import Self
 from pydantic import BaseModel
-from datetime import datetime
 import inspect
 from enum import Enum
 
 from models import PullRequest, PullRequestValidationResult, ValidationResult, CommitFile
-from utils import DateUtil, FileUtil
+from utils import FileUtil
 from configs import settings
-
+from .pull_request_validator_helper import Validation
 class Flags(Enum):
     TITLE = 1
     USER_ID = 2
@@ -29,7 +28,6 @@ def check_and_set_flag(flags_to_check, flag_to_add = None):
     return decorator
 
 class PullRequestValidator(BaseModel):
-    maxlen: int = settings.validator.MAX_ERROR_CONTENT_LENGTH
     pull_request: PullRequest | None = None
     commit_files: List[CommitFile] | None = None
     validation_details: List[ValidationResult] = []
@@ -70,8 +68,7 @@ class PullRequestValidator(BaseModel):
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
         
-        name = settings.github.get_name_from_id(self.pull_request.user_id)
-        if name is None:
+        if not Validation.is_valid_userid(self.pull_request):
             result = False
             reason = "알 수 없는 user_id 입니다."
             
@@ -87,7 +84,7 @@ class PullRequestValidator(BaseModel):
         """Pull Request의 타이틀 형식이 [Baekjoon] yy-mm-dd인지 검사. 대소문자 무시"""
         result = settings.validator.DEFAULT_RESULT
         reason = settings.validator.DEFAULT_REASON
-        if not FileUtil.is_valid_title_format(title=self.pull_request.title):
+        if not Validation.is_valid_title_format(self.pull_request):
             reason = "잘못된 타이틀 형식입니다."
             result = False
         
@@ -107,11 +104,8 @@ class PullRequestValidator(BaseModel):
         """
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
-        # 날짜가 다르면 invalid pull request
-        title_date = DateUtil.datetome_from_title(self.pull_request.title.split()[-1])
-        pull_request_date = datetime.now()
-
-        if DateUtil.is_same_day(title_date, pull_request_date):
+        
+        if not Validation.is_valid_title_date(self.pull_request):
             reason = "타이틀의 날짜가 일치하지 않습니다."
             result = False
             
@@ -127,9 +121,8 @@ class PullRequestValidator(BaseModel):
         """label에 이름이 있는지 검사"""
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
-        name = settings.github.get_name_from_id(self.pull_request.user_id)
-
-        if name not in self.pull_request.labels:
+        
+        if not Validation.is_valid_label(self.pull_request):
             result = False
             reason = "Label에 이름이 없습니다."
             
@@ -150,12 +143,9 @@ class PullRequestValidator(BaseModel):
         if invalid_files := [
             file.toString()
             for file in self.commit_files
-            if FileUtil.has_space_or_special_letters(file.toString())
+            if not Validation.has_no_special_in_file(file)
         ]:
-            if len(invalid_files) > self.maxlen:
-                content = ", ".join(invalid_files[:self.maxlen]) + "..."
-            else:
-                content = ", ".join(invalid_files)
+            content = FileUtil.format_content(invalid_files)
             reason = f'파일명에 공백이나 특수문자가 있습니다. ({content})'
             result = False
 
@@ -178,14 +168,11 @@ class PullRequestValidator(BaseModel):
         if invalid_files := [
             file.toFullString()
             for file in self.commit_files
-            if len(file.path) != 2 or file.path[1] not in settings.validator.ALLOWED_FOLDERNAMES
+            if not Validation.is_valid_file_path(file)
         ]: 
             # file.path should look like ["baekjoon", "정수론"]
             result = False
-            if len(invalid_files) >  self.maxlen:
-                content = ", ".join(invalid_files[:self.maxlen]) + "..."
-            else:
-                content = ", ".join(invalid_files)
+            content = FileUtil.format_content(invalid_files)
             reason = f'파일이 올바른 위치에 있지 않습니다. ({content})'
 
         self.add_result(ValidationResult(
@@ -203,13 +190,10 @@ class PullRequestValidator(BaseModel):
         if invalid_files := [
             file.toString()
             for file in self.commit_files
-            if file.extension not in settings.validator.ALLOWED_EXTENSIONS
+            if not Validation.is_valid_file_extension(file)
         ]:
             result = False
-            if len(invalid_files) > self.maxlen:
-                content = ", ".join(invalid_files[:self.maxlen]) + "..."
-            else:
-                content = ", ".join(invalid_files)
+            content = FileUtil.format_content(invalid_files)
             reason = f'허용되지 않은 확장자입니다. ({content})'
         
         self.add_result(ValidationResult(
@@ -224,21 +208,15 @@ class PullRequestValidator(BaseModel):
         """파일명의 형식이 문제명_이름 으로 되어있는지 검사.\n
         파일명이 `H_` 로 시작하는 경우 무시하고  `_` 를 기준으로 파일명을 분리해서 길이가 2인지 검사한다.
         """
-        
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
-        prefix = settings.validator.FILENAME_WITH_NUMBER_PREFIX
-        delimeter = settings.validator.FILENAME_DELIMITER
         if invalid_files := [
             file.toString()
             for file in self.commit_files
-            if len(file.filename.lstrip(prefix).split(delimeter)) != 2 or file.filename[0].isdigit()
+            if not Validation.is_valid_file_format(file)
         ]:
             result = False
-            if len(invalid_files) > self.maxlen:
-                content = ", ".join(invalid_files[:self.maxlen]) + "..."
-            else:
-                content = ", ".join(invalid_files)
+            content = FileUtil.format_content(invalid_files)
             reason = f'파일명의 형식이 올바르지 않습니다. ({content})'
         
         self.add_result(ValidationResult(
@@ -255,18 +233,14 @@ class PullRequestValidator(BaseModel):
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
         
-        name = settings.github.get_name_from_id(self.pull_request.user_id)
 
         if invalid_files := [
             file.toString()
             for file in self.commit_files
-            if file.filename.split('_')[-1] != name
+            if not Validation.is_valid_file_username(file=file, pr=self.pull_request)
         ]:
             result = False
-            if len(invalid_files) > self.maxlen:
-                content = ", ".join(invalid_files[:self.maxlen]) + "..."
-            else:
-                content = ", ".join(invalid_files)
+            content = FileUtil.format_content(invalid_files)
             reason = f'파일명에서 이름을 찾을 수 없습니다. ({content})'
 
         self.add_result(ValidationResult(
