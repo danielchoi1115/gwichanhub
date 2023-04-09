@@ -1,18 +1,8 @@
-import re
 from typing import List
 
 from models import CommitFile
-
 from configs import settings
 class FileUtil:
-    @staticmethod
-    def is_valid_title_format(title: str):
-        return bool(re.match(settings.validator.TITLE_PATTERN, title, re.IGNORECASE))
-    
-    @staticmethod
-    def has_space_or_special_letters(string: str):
-        return bool(re.search(settings.validator.FORBIDEN_PATTERN, string))
-    
     @staticmethod
     def parse_files(files: List[str]) -> List[CommitFile]:
         filenames = []
@@ -32,3 +22,11 @@ class FileUtil:
             )
         return filenames
     
+    @staticmethod
+    def format_content(files: List[CommitFile]):
+        maxlen = settings.validator.MAX_ERROR_CONTENT_LENGTH
+        return (
+            ", ".join(files[:maxlen]) + "..."
+            if len(files) > maxlen
+            else ", ".join(files)
+        )
