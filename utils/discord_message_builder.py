@@ -9,11 +9,11 @@ class ResultCase(BaseModel):
     rejected: List = []
     failed: List = []
     def successfulToString(self):
-        return f'({", ".join(self.successful)})' if self.successful else ''
+        return f'({", ".join(sorted(self.successful))})' if self.successful else ''
     def rejectedToString(self):
-        return f'({", ".join(self.rejected)})' if self.rejected else ''
+        return f'({", ".join(sorted(self.rejected))})' if self.rejected else ''
     def failedToString(self):    
-        return f'({", ".join(self.failed)})' if self.failed else ''
+        return f'({", ".join(sorted(self.failed))})' if self.failed else ''
 
 class DiscordMessageBuilder:
     skip_merge: bool = False
