@@ -1,6 +1,5 @@
 import re 
 from datetime import datetime, timedelta
-from typing import List
 
 from utils import DateUtil
 from configs import settings
@@ -34,7 +33,7 @@ class Validation:
     
     @staticmethod
     def is_valid_file_extension(file: CommitFile):
-        return file.extension in settings.validator.ALLOWED_EXTENSIONS
+        return file.extension.lower() in settings.validator.ALLOWED_EXTENSIONS
     
     @staticmethod
     def is_valid_file_format(file: CommitFile):
