@@ -28,6 +28,10 @@ class Validation:
         return not bool(re.search(settings.validator.FORBIDEN_PATTERN, file.toString()))
     
     @staticmethod
+    def is_firstchar_not_digit(file: CommitFile):
+        return (file.prefix != "" or not file.filename[0].isdigit())
+    
+    @staticmethod
     def is_valid_file_path(file: CommitFile):
         return len(file.path) == 2 and file.path[1].lower() in settings.validator.ALLOWED_FOLDERNAMES
     
@@ -37,9 +41,12 @@ class Validation:
     
     @staticmethod
     def is_valid_file_format(file: CommitFile):
-        prefix = settings.validator.FILENAME_WITH_NUMBER_PREFIX
         delimeter = settings.validator.FILENAME_DELIMITER
-        return len(file.filename.lstrip(prefix).split(delimeter)) == 2 and not file.filename[0].isdigit()
+        return len(file.filename.split(delimeter)) == 2
+    
+    @staticmethod
+    def is_valid_file_prefix_after_num(file: CommitFile):
+        return bool(file.prefix == "" or file.filename[0].isdigit())
     
     @staticmethod
     def is_valid_file_username(file: CommitFile, pr: PullRequest):

@@ -157,6 +157,29 @@ class PullRequestValidator(BaseModel):
         return self
     
     @check_and_set_flag([Flags.FILE_SPECIAL])
+    def validate_file_firstchar_not_digit(self) -> Self:
+        """파일명이 숫자로 시작하지 않는지 검사
+        """
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+
+        if invalid_files := [
+            file.toString()
+            for file in self.commit_files
+            if not Validation.is_firstchar_not_digit(file)
+        ]:
+            content = FileUtil.format_content(invalid_files)
+            reason = f'파일명이 숫자로 시작합니다. ({content})'
+            result = False
+
+        self.add_result(ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.FILE_SPECIAL])
     def validate_file_path(self) -> Self:
         """파일이 올바른 위치에 있는지 검사. 
         예시) baekjoon/정수론 폴더에 있는지 확인.
@@ -194,7 +217,7 @@ class PullRequestValidator(BaseModel):
         ]:
             result = False
             content = FileUtil.format_content(invalid_files)
-            reason = f'허용되지 않은 확장자입니다. ({content})'
+            reason = f'허용되지 않는 확장자입니다. ({content})'
         
         self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
@@ -206,7 +229,7 @@ class PullRequestValidator(BaseModel):
     @check_and_set_flag([Flags.FILE_SPECIAL], Flags.FILE_FORMAT)
     def validate_file_format(self) -> Self:
         """파일명의 형식이 문제명_이름 으로 되어있는지 검사.\n
-        파일명이 `H_` 로 시작하는 경우 무시하고  `_` 를 기준으로 파일명을 분리해서 길이가 2인지 검사한다.
+        `_` 를 기준으로 파일명을 분리해서 길이가 2인지 아닌지 검사한다.
         """
         reason = settings.validator.DEFAULT_REASON
         result = settings.validator.DEFAULT_RESULT
@@ -218,6 +241,28 @@ class PullRequestValidator(BaseModel):
             result = False
             content = FileUtil.format_content(invalid_files)
             reason = f'파일명의 형식이 올바르지 않습니다. ({content})'
+        
+        self.add_result(ValidationResult(
+            validation=inspect.currentframe().f_code.co_name,
+            result=result,
+            reason=reason
+        ))
+        return self
+    
+    @check_and_set_flag([Flags.FILE_FORMAT])
+    def validate_file_prefix_after_num(self) -> Self:
+        """`H_` 로 시작하는데 다음에 숫자가 없는 경우 검사한다.
+        """
+        reason = settings.validator.DEFAULT_REASON
+        result = settings.validator.DEFAULT_RESULT
+        if invalid_files := [
+            file.toString()
+            for file in self.commit_files
+            if not Validation.is_valid_file_prefix_after_num(file)
+        ]:
+            result = False
+            content = FileUtil.format_content(invalid_files)
+            reason = f'숫자로 시작하지 않는 파일명에 H_ 키워드가 있습니다. ({content})'
         
         self.add_result(ValidationResult(
             validation=inspect.currentframe().f_code.co_name,
@@ -260,9 +305,11 @@ class PullRequestValidator(BaseModel):
                         .validate_title_date()          \
                         .validate_labels()              \
                         .validate_file_no_special() \
+                        .validate_file_firstchar_not_digit() \
                         .validate_file_path()       \
                         .validate_file_extension()      \
                         .validate_file_format()     \
+                        .validate_file_prefix_after_num() \
                         .validate_file_username()       \
                         .validate()
 
