@@ -5,9 +5,12 @@ class CommitFile(BaseModel):
     path: List[str] | None = None
     filename: str | None = None
     extension: str | None = None
+    prefix: str = ""
     
+    def toFilename(self):
+        return f"{self.prefix}{self.filename}"
     def toString(self):
-        return f"{self.filename}.{self.extension}" if self.extension else self.filename
+        return f"{self.toFilename()}.{self.extension}" if self.extension else self.toFilename()
     def pathToString(self):
         return "/".join(self.path)
     def toFullString(self):
