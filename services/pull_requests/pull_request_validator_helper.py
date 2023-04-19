@@ -37,7 +37,12 @@ class Validation:
     
     @staticmethod
     def is_valid_file_extension(file: CommitFile):
-        return file.extension.lower() in settings.validator.ALLOWED_EXTENSIONS
+        return (
+            file.extension.lower() in settings.validator.ALLOWED_EXTENSIONS
+            if file.extension
+            else False
+        )
+        
     
     @staticmethod
     def is_valid_file_format(file: CommitFile):
