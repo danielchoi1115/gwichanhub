@@ -321,39 +321,3 @@ class PullRequestValidator(BaseModel):
         ]
 
 pullRequestValidator = PullRequestValidator()
-
-def validate_pull_request(self, pr: PullRequest) -> PullRequestValidationResult:
-    validation_details: List[ValidationResult] = []
-
-    # User ID 검증
-    user_id_result = self.validate_user_id(pr)
-    validation_details.append(user_id_result)
-
-    if user_id_result.result:
-        # Title 형식 검증
-        title_format_result = self.validate_title_format(pr)
-        validation_details.append(title_format_result)
-        
-        if title_format_result.result:
-            validation_details.append(self.validate_title_date(pr))
-
-        validation_details.append(self.validate_labels(pr))
-        no_special_result = self.validate_file_no_special(pr)
-        
-        filenames = self.parse_filenames(pr)
-        if no_special_result.result:
-            validation_details.append(self.validate_file_path(filenames))
-            validation_details.append(self.validate_file_extension(filenames))
-            format_result = self.validate_file_format(filenames)
-            validation_details.append(format_result)
-            
-            if format_result.result:
-                validation_details.append(self.validate_file_username(pr, filenames))
-
-
-    validation_result = all(res.result for res in validation_details)
-    return PullRequestValidationResult(
-        validation_result=validation_result,
-        validation_details=validation_details,
-        pull_request=pr
-    )

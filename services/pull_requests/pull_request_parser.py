@@ -22,7 +22,7 @@ class PullRequestParser(BaseModel):
                 created_at = utc_datetime.astimezone(pytz.timezone('Asia/Seoul'))
                 
                 labels = [l.get("name") for l in p.get('labels')]
-                files = [f['filename'] for f in pull_request_files.get(number)]
+                files = [f['filename'] for f in pull_request_files.get(number) if f['status'] != "removed"]
                 
                 self.parsed_pull_requests.append(
                     PullRequest(
