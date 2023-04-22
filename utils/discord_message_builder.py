@@ -8,12 +8,16 @@ class ResultCase(BaseModel):
     successful: List = []
     rejected: List = []
     failed: List = []
+    notFound: List = []
+    
     def successfulToString(self):
         return f'({", ".join(sorted(self.successful))})' if self.successful else ''
     def rejectedToString(self):
         return f'({", ".join(sorted(self.rejected))})' if self.rejected else ''
     def failedToString(self):    
         return f'({", ".join(sorted(self.failed))})' if self.failed else ''
+    def notFoundToString(self):    
+        return f'({", ".join(sorted(self.notFound))})' if self.notFound else ''
 
 class DiscordMessageBuilder:
     skip_merge: bool = False
@@ -24,23 +28,44 @@ class DiscordMessageBuilder:
         result_case = ResultCase(
             total=len(merge_pull_request_results)
         )
+        
+        found = set()
         for result in merge_pull_request_results:
+            found.add(result.validation.pull_request.user_id)
+            
             name = settings.github.get_name_from_id(result.validation.pull_request.user_id)
             if result.merge.merged:
                 result_case.successful.append(name)
 
             elif not result.validation.validation_result:
                 result_case.rejected.append(name)
-
             else:
                 result_case.failed.append(name)
+
+        result_case.notFound = [
+            settings.github.get_name_from_id(id) 
+            for id in settings.github.id_map
+            if id not in found
+        ]
 
         return result_case
     
     def format_summary(self, result_case: ResultCase):
-        # head = 'TEST' if self.skip_merge else DateUtil.get_pr_date_header()
         head = DateUtil.get_pr_date_header()
-        return f"""**{head} Merge Pull Request Report** ```md\n<Summary>\nNo. Pull Requests: {result_case.total}\n성공: {len(result_case.successful)}건 {result_case.successfulToString()}\n반려: {len(result_case.rejected)}건 {result_case.rejectedToString()}\n실패: {len(result_case.failed)}건 {result_case.failedToString()}```""" 
+        if self.skip_merge:
+            head = f'TEST {head}'
+        header = f"""**{head} Merge Pull Request Report** ```md\n<Summary>\n"""
+        header += f"""No. Pull Requests: {result_case.total}\n"""
+        header += f"""성공: {len(result_case.successful)}건 {result_case.successfulToString()}\n"""
+        header += f"""반려: {len(result_case.rejected)}건 {result_case.rejectedToString()}\n"""
+        header += f"""실패: {len(result_case.failed)}건 {result_case.failedToString()}```"""
+
+        # 주말이 아니면 미제출 인원도 출력
+        if DateUtil.get_report_date().weekday() < 5:
+            header = header.rstrip("```")
+            header += f"""\n미제출: {len(result_case.notFound)}건 {result_case.notFoundToString()}```"""
+
+        return header
     
     def format_pr_header(self, pull_request: PullRequest, text):
         return f"""<PR #{pull_request.number} "{pull_request.title}" by {settings.github.get_name_from_id(pull_request.user_id)}>\n{text}"""

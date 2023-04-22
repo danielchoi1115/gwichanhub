@@ -14,8 +14,12 @@ date_map = {
 # https://www.w3schools.com/python/python_datetime.asp
 class DateUtil:
     @staticmethod
+    def get_report_date():
+        return datetime.now().astimezone(pytz.timezone('Asia/Seoul')) - timedelta(days = 1)
+    
+    @staticmethod
     def get_pr_date_header():
-        t = datetime.now().astimezone(pytz.timezone('Asia/Seoul')) - timedelta(days = 1)
+        t = DateUtil.get_report_date()
         weeknum = DateUtil.get_weeknumber_from_startdate(t)
         return f'({weeknum}주차) {t.strftime("%y년 %m월 %d일")} {date_map[t.weekday()]}'    
     
