@@ -33,7 +33,7 @@ class Validation:
     
     @staticmethod
     def is_valid_file_path(file: CommitFile):
-        return len(file.path) == 2 and file.path[1].lower() in settings.validator.ALLOWED_FOLDERNAMES
+        return len(file.path) == 2 and file.path[1].upper() in settings.validator.ALLOWED_FOLDERNAMES
     
     @staticmethod
     def is_valid_file_extension(file: CommitFile):
