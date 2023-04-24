@@ -29,9 +29,9 @@ class DiscordMessageBuilder:
             total=len(merge_pull_request_results)
         )
         
-        found = set()
+        found_id = set()
         for result in merge_pull_request_results:
-            found.add(result.validation.pull_request.user_id)
+            found_id.add(result.validation.pull_request.user_id.lower())
             
             name = settings.github.get_name_from_id(result.validation.pull_request.user_id)
             if result.merge.merged:
@@ -45,7 +45,7 @@ class DiscordMessageBuilder:
         result_case.notFound = [
             settings.github.get_name_from_id(id) 
             for id in settings.github.id_map
-            if id not in found
+            if id not in found_id
         ]
 
         return result_case
