@@ -11,7 +11,7 @@ class Validation:
     
     @staticmethod
     def is_valid_title_format(pr: PullRequest):
-        return bool(re.match(settings.validator.TITLE_PATTERN, pr.title, re.IGNORECASE))
+        return bool(re.match(settings.validator.TITLE_PATTERN, pr.title.strip(), re.IGNORECASE))
     
     @staticmethod
     def is_valid_title_date(pr: PullRequest):
