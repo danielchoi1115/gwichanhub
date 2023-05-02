@@ -1,8 +1,14 @@
 # 귀찬헙 (GwichanHub)
 
-GwichanHub은 매일 아침 9시에 https://github.com/it-e-7/Algorithm Repository에 제출된 Pull Request들을 검사하고 자동으로 Merge를 대신 해주는 서비스입니다.
+GwichanHub은 귀찮은 일인 `Pull Request (PR)` 의 `Merge` 과정을 자동화해주는 서비스입니다.
 
-# Workflow
+매일 아침 9시에 https://github.com/it-e-7/Algorithm Repository에 제출된 `PR`들을 검사하고 규칙에 맞게 잘 작성되었을 경우 Main 브랜치에 `Merge`합니다.
+
+검사한 결과는 제출 건수, 반려 사유등과 함께 디스코드 봇을 통해 전송됩니다.
+
+<img src="https://user-images.githubusercontent.com/100273844/235680764-c32cbb95-3850-4418-b0ab-aa89b28bab5e.png" width="600"/>
+
+# 전체 흐름 (Workflow)
 
 ![스크린샷 2023-05-01 163135](https://user-images.githubusercontent.com/100273844/235423262-a67fbe73-3913-4733-8fe1-650264c8e670.png)
 
@@ -25,6 +31,7 @@ GwichanHub은 매일 아침 9시에 https://github.com/it-e-7/Algorithm Reposito
 9. `파일명`이 `문제명_이름` 형식으로 되어있지 않는 경우 (ex. `통학의신+승열.py`)
 10. `파일명`에 제출자의 이름이 없거나 다른 이름이 있는 경우 (ex. `통학의신.py`)
 
+
 다음과 같은 경우 Pull Request가 Merge가 실패처리 됩니다.
 
 1. Merge Conflict가 있는 경우
@@ -44,7 +51,6 @@ GwichanHub은 매일 아침 9시에 https://github.com/it-e-7/Algorithm Reposito
 ### **`Mod`**
 
 - Pull Request 타이틀에 공백이 있어도 반려처리되지 않도록 수정
-
 ## 23-04-24
 
 ### **`Bug`**
