@@ -60,10 +60,12 @@ class DiscordMessageBuilder:
         header += f"""반려: {len(result_case.rejected)}건 {result_case.rejectedToString()}\n"""
         header += f"""실패: {len(result_case.failed)}건 {result_case.failedToString()}```"""
 
+
+        # 2023-07-11 이후 미제출 인원 출력 하지 않는 것으로 변경
         # 주말이 아니면 미제출 인원도 출력
-        if DateUtil.get_report_date().weekday() < 5:
-            header = header.rstrip("```")
-            header += f"""\n미제출: {len(result_case.notFound)}건 {result_case.notFoundToString()}```"""
+        # if DateUtil.get_report_date().weekday() < 5:
+        #     header = header.rstrip("```")
+        #     header += f"""\n미제출: {len(result_case.notFound)}건 {result_case.notFoundToString()}```"""
 
         return header
     
